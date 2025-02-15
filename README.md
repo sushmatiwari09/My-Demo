@@ -1,38 +1,58 @@
-# My-Demo
-
 Feature: Device Activation Negative Scenarios
 
-  Scenario: Trying to proceed without entering User ID
+  Scenario: Continue button enabled when both fields are filled
     Given I am on the device activation screen
-    When I leave the User ID field empty
-    And I try to continue
-    Then I should see an error message indicating that User ID is required
+    When I enter a valid Subscriber ID "1234567890"
+    And I enter a valid User ID "user@example.com"
+    Then the Continue button should be enabled
 
-  Scenario: Entering an invalid User ID format
+  Scenario: Continue button disabled if any field is empty
     Given I am on the device activation screen
-    When I enter an invalid User ID "abcd@123"
-    And I try to continue
-    Then I should see an error message indicating that the User ID format is incorrect
-
-  Scenario: Entering an incorrect Subscriber ID
-    Given I am on the device activation screen
-    When I enter an incorrect Subscriber ID "000000"
-    And I try to continue
-    Then I should see an error message indicating that the Subscriber ID is invalid
-
-  Scenario: Leaving both fields empty
-    Given I am on the device activation screen
-    When I leave the Subscriber ID and User ID fields empty
-    And I try to continue
-    Then I should see an error message indicating that both fields are required
-
-  Scenario: Checking if the "Continue" button is disabled with incomplete input
-    Given I am on the device activation screen
-    When I enter only the Subscriber ID "4567465"
-    And I do not enter the User ID
+    When I enter a valid Subscriber ID "1234567890"
+    And I leave the User ID field empty
     Then the Continue button should be disabled
 
+  Scenario: Validate maximum length of Subscriber ID and User ID
+    Given I am on the device activation screen
+    When I enter a Subscriber ID with more than 20 characters
+    Then I should see an error message indicating that Subscriber ID exceeds maximum length
+    When I enter a User ID with more than 32 characters
+    Then I should see an error message indicating that User ID exceeds maximum length
 
+  Scenario: Required message displayed when either field is empty
+    Given I am on the device activation screen
+    When I leave the Subscriber ID field empty
+    And I try to continue
+    Then I should see an error message indicating that Subscriber ID is required
+    And the Continue button should be disabled
+
+  Scenario: Subscriber ID should contain only alphanumeric characters
+    Given I am on the device activation screen
+    When I enter a Subscriber ID with special characters "abc123!@#"
+    Then I should see an error message indicating invalid characters in Subscriber ID
+
+  Scenario: User ID should allow alphanumeric and specific special characters
+    Given I am on the device activation screen
+    When I enter a User ID with invalid special characters "user^&*()@example.com"
+    Then I should see an error message indicating invalid characters in User ID
+
+
+import { Given, When, Then } from "@wdio/cucumber-framework";
+import { expect } from "chai";
+import { deviceActivationPage } from "../pages/deviceActivationPage";
+
+Given("I am on the device activation screen", async function () {
+  // Assume this method navigates to the device activation screen
+  await deviceActivationPage.navigateToDeviceActivationScreen();
+});
+
+When("I enter a valid Subscriber ID {string}", async function (subscriberId:
+::contentReference[oaicite:0]{index=0}
+ 
+
+
+
+    page obeject ; 
 
 import { driver } from "../utils/driver";
 
@@ -67,10 +87,24 @@ class DeviceActivationPage {
     return await errorMsg.getText();
   }
 
-  // Method: Check if Continue button is disabled
-  async isContinueButtonDisabled(): Promise<boolean> {
+  // Method: Check if Continue button is enabled
+  async isContinueButtonEnabled(): Promise<boolean> {
     const button = await driver.$(this.continueButton);
-    return !(await button.isEnabled());
+    return await button.isEnabled();
+  }
+
+  // Method: Get Subscriber ID field value length
+  async getSubscriberIdLength(): Promise<number> {
+    const subscriberField = await driver.$(this.subscriberIdInput);
+    const value = await subscriberField.getValue();
+    return value.length;
+  }
+
+  // Method: Get User ID field value length
+  async getUserIdLength(): Promise<number> {
+    const userIdField = await driver.$(this.userIdInput);
+    const value = await userIdField.getValue();
+    return value.length;
   }
 
   // Method: Wait for a specific error message
@@ -86,72 +120,4 @@ class DeviceActivationPage {
 }
 
 export const deviceActivationPage = new DeviceActivationPage();
-
-
-import { Given, When, Then } from "@wdio/cucumber-framework";
-import { expect } from "chai";
-import { deviceActivationPage } from "../pages/deviceActivationPage";
-
-Given("I am on the device activation screen", async function () {
-  await deviceActivationPage.waitForDeviceActivationScreen();
-});
-
-When("I leave the User ID field empty", async function () {
-  await deviceActivationPage.enterUserId("");
-});
-
-When("I enter an invalid User ID {string}", async function (userId: string) {
-  await deviceActivationPage.enterUserId(userId);
-});
-
-When("I enter an incorrect Subscriber ID {string}", async function (subscriberId: string) {
-  await deviceActivationPage.enterSubscriberId(subscriberId);
-});
-
-When("I leave the Subscriber ID and User ID fields empty", async function () {
-  await deviceActivationPage.enterSubscriberId("");
-  await deviceActivationPage.enterUserId("");
-});
-
-When("I enter only the Subscriber ID {string}", async function (subscriberId: string) {
-  await deviceActivationPage.enterSubscriberId(subscriberId);
-});
-
-When("I try to continue", async function () {
-  await deviceActivationPage.clickContinueButton();
-});
-
-Then(
-  "I should see an error message indicating that User ID is required",
-  async function () {
-    await deviceActivationPage.waitForErrorMessage("User ID is required.");
-  }
-);
-
-Then(
-  "I should see an error message indicating that the User ID format is incorrect",
-  async function () {
-    await deviceActivationPage.waitForErrorMessage("Invalid User ID format.");
-  }
-);
-
-Then(
-  "I should see an error message indicating that the Subscriber ID is invalid",
-  async function () {
-    await deviceActivationPage.waitForErrorMessage("Invalid Subscriber ID.");
-  }
-);
-
-Then(
-  "I should see an error message indicating that both fields are required",
-  async function () {
-    await deviceActivationPage.waitForErrorMessage("Subscriber ID and User ID are required.");
-  }
-);
-
-Then("the Continue button should be disabled", async function () {
-  const isDisabled = await deviceActivationPage.isContinueButtonDisabled();
-  expect(isDisabled).to.be.true;
-});
-
 
