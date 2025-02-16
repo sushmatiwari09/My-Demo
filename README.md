@@ -1,173 +1,183 @@
-@demo
-Feature: Login to the application
+import SwiftUI
 
-  Scenario: Continue button disabled if any field is empty
-    Given I am on the device activation screen
-    When I enter a valid Subscriber ID "123456sdfdfg7890" and leave the User ID field empty
-    Then I should see an error message indicating that Subscriber ID is required And the Continue button should be disabled
+struct SmartPassPinView: View {
+    @State private var pin: String = ""
+    @State private var confirmPin: String = ""
+    @State private var showPinRestrictions = false
+    @State private var isPinValid = false
+    @State private var errorMessage: String?
 
-  Scenario: Validate maximum length of Subscriber ID and User ID
-    Given I am on the device activation screen
-    When I enter a Subscriber ID with more than 20 characters
-    Then I should not be able to type any characters
-    When I enter a User ID with more than 32 characters
-    Then I should not be able to type any characters
+    var body: some View {
+        VStack {
+            Text("Set up your Smart Pass PIN")
+                .font(.title2)
+                .fontWeight(.bold)
+                .padding(.top, 40)
+            
+            Text("Choose a new 4-digit PIN to make transactions, submit requests, and access security settings")
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 20)
+            
+            Spacer()
 
-  Scenario: Required message displayed when either field is empty
-    Given I am on the device activation screen
-    When I leave the Subscriber ID field empty
-    Then I should see an error message indicating that Subscriber ID is required And the Continue button should be disabled
+            // PIN Entry Fields
+            VStack(spacing: 20) {
+                SecureField("Enter PIN", text: $pin)
+                    .keyboardType(.numberPad)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .multilineTextAlignment(.center)
+                    .onChange(of: pin) { _ in
+                        validatePin()
+                    }
+                
+                SecureField("Confirm PIN", text: $confirmPin)
+                    .keyboardType(.numberPad)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .multilineTextAlignment(.center)
+                    .onChange(of: confirmPin) { _ in
+                        validatePin()
+                    }
+            }
+            .padding(.horizontal, 40)
 
-  Scenario: Subscriber ID should contain only alphanumeric characters
-    Given I am on the device activation screen
-    When I enter a Subscriber ID with special characters "abc123!@#"
-    Then I should not be able to type any special characters
+            // Error Message
+            if let errorMessage = errorMessage {
+                Text(errorMessage)
+                    .foregroundColor(.red)
+                    .font(.footnote)
+                    .padding(.top, 5)
+            }
 
-  Scenario: User ID should allow alphanumeric and specific special characters
-    Given I am on the device activation screen
-    When I enter a User ID with invalid special characters "user&%()example.com"
-    Then I should not be able to type any special characters which is invalid
+            // PIN Restrictions Link
+            Button(action: {
+                showPinRestrictions.toggle()
+            }) {
+                Text("View Smart Pass PIN guidelines")
+                    .font(.footnote)
+                    .foregroundColor(.blue)
+            }
+            .padding(.top, 10)
+            
+            // Continue Button
+            Button(action: {
+                // Handle PIN Submission
+                print("PIN Set Successfully")
+            }) {
+                Text("Continue")
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(isPinValid ? Color.blue : Color.gray)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+            }
+            .padding(.horizontal, 40)
+            .padding(.top, 20)
+            .disabled(!isPinValid)
 
-  Scenario: Validate empty spaces in Subscriber ID and User ID fields
-    Given I am on the device activation screen
-    When I enter spaces in the Subscriber ID or User ID fields
-    Then I should see an error message indicating that spaces are not allowed
-
-  Scenario: Validate minimum length requirement for Subscriber ID and User ID
-    Given I am on the device activation screen
-    When I enter a Subscriber ID with fewer than 5 characters
-    Then I should see an error message indicating that the Subscriber ID must have a minimum of 5 characters
-    When I enter a User ID with fewer than 5 characters
-    Then I should see an error message indicating that the User ID must have a minimum of 5 characters
-
-  Scenario: Validate case sensitivity in User ID
-    Given I am on the device activation screen
-    When I enter a User ID with mixed uppercase and lowercase characters "TestUser123"
-    Then The system should accept the User ID and retain the case
-
-  Scenario: Validate Subscriber ID and User ID against SQL injection
-    Given I am on the device activation screen
-    When I enter an SQL injection attempt "' OR '1'='1"
-    Then The system should reject the input and show an error message
-
-  Scenario: Validate XSS attack prevention in Subscriber ID and User ID
-    Given I am on the device activation screen
-    When I enter a script tag "<script>alert('XSS')</script>" in the Subscriber ID or User ID field
-    Then The system should sanitize the input and not execute any scripts
-
-  Scenario Outline: As a user, I can register into the application using subId and userId
-    Given I am on the device activation screen
-    When I enter the "<subId>" and "<userId>"
-    Then I should be successfully registered
-
-    Examples:
-      | subId      | userId        |
-      | user12345  | testuser1     |
-      | test123    | testUser2     |
-      | sub56789   | demoUser123   |
-
-
-
-
-import { $, browser, by, element } from 'protractor';
-
-export class DeviceActivationPage {
-    // Locators
-    subscriberIDField = $('#subscriberID');
-    userIDField = $('#userID');
-    continueButton = $('#continue');
-    errorMessage = $('.error-message');
-
-    // Methods
-    async navigateTo() {
-        await browser.get('/device-activation');
+            Spacer()
+        }
+        .sheet(isPresented: $showPinRestrictions) {
+            PinRestrictionsView()
+        }
     }
-
-    async enterSubscriberID(subscriberID: string) {
-        await this.subscriberIDField.clear();
-        await this.subscriberIDField.sendKeys(subscriberID);
+    
+    func validatePin() {
+        let rules = PinValidationRules()
+        if pin == confirmPin {
+            if rules.isValid(pin: pin) {
+                isPinValid = true
+                errorMessage = nil
+            } else {
+                isPinValid = false
+                errorMessage = "PIN does not meet the required criteria."
+            }
+        } else {
+            isPinValid = false
+            errorMessage = "PIN and confirmation PIN do not match."
+        }
     }
+}
 
-    async enterUserID(userID: string) {
-        await this.userIDField.clear();
-        await this.userIDField.sendKeys(userID);
+struct PinValidationRules {
+    func isValid(pin: String) -> Bool {
+        guard pin.count == 4, pin.allSatisfy(\.isNumber) else { return false }
+        
+        let forbiddenPatterns = generateForbiddenPatterns()
+        
+        return !forbiddenPatterns.contains(pin)
     }
-
-    async clickContinue() {
-        await this.continueButton.click();
-    }
-
-    async getErrorMessage() {
-        return await this.errorMessage.getText();
-    }
-
-    async isContinueButtonDisabled() {
-        return !(await this.continueButton.isEnabled());
+    
+    private func generateForbiddenPatterns() -> Set<String> {
+        var patterns = Set<String>()
+        
+        // Sequential numbers (e.g., 1234, 2345)
+        for i in 0...6 {
+            let sequence = (i...(i+3)).map { "\($0)" }.joined()
+            patterns.insert(sequence)
+        }
+        
+        // Reversed sequential numbers (e.g., 4321, 5432)
+        for i in (3...9).reversed() {
+            let sequence = (i-3...i).reversed().map { "\($0)" }.joined()
+            patterns.insert(sequence)
+        }
+        
+        // Repeated numbers (e.g., 1111, 2222)
+        for i in 0...9 {
+            let repeated = String(repeating: "\(i)", count: 4)
+            patterns.insert(repeated)
+        }
+        
+        // Mirrored numbers (e.g., 1221, 3443)
+        for i in 0...9 {
+            for j in 0...9 where i != j {
+                let mirrored = "\(i)\(j)\(j)\(i)"
+                patterns.insert(mirrored)
+            }
+        }
+        
+        // Repeating doubles (e.g., 1212, 3434)
+        for i in 0...9 {
+            for j in 0...9 where i != j {
+                let repeatingDoubles = "\(i)\(j)\(i)\(j)"
+                patterns.insert(repeatingDoubles)
+            }
+        }
+        
+        return patterns
     }
 }
 
 
-import { Given, When, Then } from 'cucumber';
-import { expect } from 'chai';
-import { DeviceActivationPage } from '../pages/deviceActivation.page';
+import XCTest
+@testable import YourAppModuleName
 
-const deviceActivationPage = new DeviceActivationPage();
+final class PinValidationTests: XCTestCase {
+    var validator: PinValidationRules!
 
-Given('I am on the device activation screen', async () => {
-    await deviceActivationPage.navigateTo();
-});
+    override func setUp() {
+        super.setUp()
+        validator = PinValidationRules()
+    }
 
-When('I enter a valid Subscriber ID {string} and leave the User ID field empty', async (subscriberID: string) => {
-    await deviceActivationPage.enterSubscriberID(subscriberID);
-});
+    func testValidPin() {
+        XCTAssertTrue(validator.isValid(pin: "2580"), "PIN '2580' should be valid.")
+    }
 
-Then('I should see an error message indicating that Subscriber ID is required And the Continue button should be disabled', async () => {
-    const message = await deviceActivationPage.getErrorMessage();
-    expect(message).to.include('Subscriber ID is required');
-    expect(await deviceActivationPage.isContinueButtonDisabled()).to.be.true;
-});
+    func testInvalidPinWithLetters() {
+        XCTAssertFalse(validator.isValid(pin: "12a4"), "PIN '12a4' should be invalid due to letters.")
+    }
 
-When('I enter a Subscriber ID with more than 20 characters', async () => {
-    await deviceActivationPage.enterSubscriberID('123456789012345678901');
-});
+    func testInvalidPinWithLessThanFourDigits() {
+        XCTAssertFalse(validator.isValid(pin: "123"), "PIN '123' should be invalid due to insufficient digits.")
+    }
 
-Then('I should not be able to type any characters', async () => {
-    const value = await deviceActivationPage.subscriberIDField.getAttribute('value');
-    expect(value.length).to.be.at.most(20);
-});
+    func testInvalidSequentialPin() {
+        XCTAssertFalse(validator.isValid(pin: "1234"), "PIN '1234' should be invalid due to sequential digits.")
+    }
 
-When('I enter a User ID with more than 32 characters', async () => {
-    await deviceActivationPage.enterUserID('user_with_more_than_32_characters_example');
-});
-
-Then('I should not be able to type any characters', async () => {
-    const value = await deviceActivationPage.userIDField.getAttribute('value');
-    expect(value.length).to.be.at.most(32);
-});
-
-When('I enter a Subscriber ID with special characters {string}', async (subscriberID: string) => {
-    await deviceActivationPage.enterSubscriberID(subscriberID);
-});
-
-Then('I should not be able to type any special characters', async () => {
-    const value = await deviceActivationPage.subscriberIDField.getAttribute('value');
-    expect(value).to.match(/^[a-zA-Z0-9]*$/);
-});
-
-When('I enter an SQL injection attempt {string}', async (sqlInjection: string) => {
-    await deviceActivationPage.enterSubscriberID(sqlInjection);
-});
-
-Then('The system should reject the input and show an error message', async () => {
-    const message = await deviceActivationPage.getErrorMessage();
-    expect(message).to.include('Invalid input');
-});
-
-When('I enter a script tag {string} in the Subscriber ID or User ID field', async (scriptTag: string) => {
-    await deviceActivationPage.enterSubscriberID(scriptTag);
-});
-
-Then('The system should sanitize the input and not execute any scripts', async () => {
-    const value = await deviceActivationPage.subscriberIDField.getAttribute('value');
-    expect(value).not.to.include('<script>');
-});
+    func testInvalidRepeatedPin() {
+        XCTAssertFalse(validator.isValid(pin: "1111"), "PIN '1111' should be invalid due to repeated digits.")
+    }
+}
