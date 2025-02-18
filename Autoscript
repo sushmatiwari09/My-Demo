@@ -1,0 +1,112 @@
+Feature: Register User and Activate Device
+
+  Scenario: Verify placeholder text in Subscriber ID and User ID fields
+    Given I am on the device activation screen
+    Then I should see the placeholder text "Enter subscriber ID" in the Subscriber ID field
+    And I should see the placeholder text "Enter user ID" in the User ID field
+
+  Scenario: Continue button should be disabled when Subscriber ID is empty
+    Given I am on the device activation screen
+    When I leave the Subscriber ID field empty
+    And I enter "testuser1" in the User ID field
+    Then I should see the Continue button is disabled
+
+  Scenario: Continue button should be disabled when User ID is empty
+    Given I am on the device activation screen
+    When I enter "1234567890" in the Subscriber ID field
+    And I leave the User ID field empty
+    Then I should see the Continue button is disabled
+
+  Scenario: Validate maximum length of Subscriber ID and User ID
+    Given I am on the device activation screen
+    When I enter a Subscriber ID with more than 20 characters
+    Then I should not be able to type any more characters
+    When I enter a User ID with more than 32 characters
+    Then I should not be able to type any more characters
+
+
+import { $, browser } from "@wdio/globals";
+
+class ActivationPage {
+    get subscriberIDField() { return $('input[name="subscriberID"]'); }
+    get userIDField() { return $('input[name="userID"]'); }
+    get continueButton() { return $('button[type="submit"]'); }
+
+    async open() {
+        await browser.url('/activation'); // Change this to the correct URL
+    }
+
+    async getPlaceholderText(element: WebdriverIO.Element) {
+        return await element.getAttribute('placeholder');
+    }
+
+    async enterSubscriberID(subscriberID: string) {
+        await this.subscriberIDField.setValue(subscriberID);
+    }
+
+    async enterUserID(userID: string) {
+        await this.userIDField.setValue(userID);
+    }
+
+    async isContinueButtonDisabled() {
+        return await this.continueButton.getAttribute('disabled') !== null;
+    }
+}
+
+export default new ActivationPage();
+
+
+
+import { Given, When, Then } from "@cucumber/cucumber";
+import { expect } from "@wdio/globals";
+import ActivationPage from "../page-objects/ActivationPage";
+
+Given("I am on the device activation screen", async () => {
+    await ActivationPage.open();
+});
+
+Then("I should see the placeholder text {string} in the Subscriber ID field", async (expectedPlaceholder: string) => {
+    const actualPlaceholder = await ActivationPage.getPlaceholderText(ActivationPage.subscriberIDField);
+    expect(actualPlaceholder).toBe(expectedPlaceholder);
+});
+
+Then("I should see the placeholder text {string} in the User ID field", async (expectedPlaceholder: string) => {
+    const actualPlaceholder = await ActivationPage.getPlaceholderText(ActivationPage.userIDField);
+    expect(actualPlaceholder).toBe(expectedPlaceholder);
+});
+
+When("I leave the Subscriber ID field empty", async () => {
+    await ActivationPage.enterSubscriberID("");
+});
+
+When("I leave the User ID field empty", async () => {
+    await ActivationPage.enterUserID("");
+});
+
+When("I enter {string} in the User ID field", async (userID: string) => {
+    await ActivationPage.enterUserID(userID);
+});
+
+When("I enter {string} in the Subscriber ID field", async (subscriberID: string) => {
+    await ActivationPage.enterSubscriberID(subscriberID);
+});
+
+Then("I should see the Continue button is disabled", async () => {
+    const isDisabled = await ActivationPage.isContinueButtonDisabled();
+    expect(isDisabled).toBe(true);
+});
+
+When("I enter a Subscriber ID with more than 20 characters", async () => {
+    await ActivationPage.enterSubscriberID("123456789012345678901");
+});
+
+When("I enter a User ID with more than 32 characters", async () => {
+    await ActivationPage.enterUserID("abcdefghijklmnopqrstuvwxyz123456");
+});
+
+Then("I should not be able to type any more characters", async () => {
+    const subIDValue = await ActivationPage.subscriberIDField.getValue();
+    const userIDValue = await ActivationPage.userIDField.getValue();
+    expect(subIDValue.length).toBeLessThanOrEqual(20);
+    expect(userIDValue.length).toBeLessThanOrEqual(32);
+});
