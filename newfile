@@ -1,0 +1,74 @@
+import SwiftUI
+
+struct SmartPassPINInput: View {
+    @Binding var pin: String
+    var validatePIN: (String) -> Bool
+    @State private var errorMessage: String? = nil
+
+    var body: some View {
+        VStack(spacing: 10) {
+            SecureField("Enter PIN", text: Binding(
+                get: { self.pin },
+                set: { newValue in
+                    self.updatePIN(with: newValue)
+                }
+            ))
+            .keyboardType(.numberPad)
+            .textFieldStyle(RoundedBorderTextFieldStyle())
+            .multilineTextAlignment(.center)
+            .frame(width: 200)
+
+            if let errorMessage = errorMessage {
+                Text(errorMessage!)
+                    .foregroundColor(.red)
+                    .font(.caption)
+            }
+        }
+    }
+
+    private func updatePIN(with newValue: String) {
+        let filtered = newValue.filter { "0123456789".contains($0) }
+        if filtered.count <= 4 {
+            if validatePIN(filtered) {
+                self.pin = filtered
+                self.errorMessage = nil
+            } else {
+                self.errorMessage = "Invalid PIN pattern. Choose a different PIN."
+            }
+        }
+    }
+}
+
+
+import SwiftUI
+
+struct ContentView: View {
+    @State private var pin: String = ""
+
+    var body: some View {
+        VStack {
+            SmartPassPINInput(pin: $pin, validatePIN: isValidPIN)
+
+            Button("Confirm PIN") {
+                print("PIN set successfully")
+            }
+            .padding()
+            .disabled(pin.count < 4)
+        }
+        .padding()
+    }
+
+    private func isValidPIN(_ pin: String) -> Bool {
+        guard pin.count == 4 else { return true } // Allow incomplete PINs
+
+        let seriesPatterns = ["1234", "2345", "3456", "4567", "5678", "6789", "7890", "0987"]
+        let reversedSeriesPatterns = seriesPatterns.map { String($0.reversed()) }
+        let repeatingNumbers = (0...9).map { String(repeating: "\($0)", count: 4) }
+        let mirroredPatterns = ["1221", "2112", "3443", "4334", "5665", "6556", "7887", "8778"]
+        let repeatingDoubles = ["1212", "3434", "5656", "7878", "0909"]
+
+        let invalidPatterns = seriesPatterns + reversedSeriesPatterns + repeatingNumbers + mirroredPatterns + repeatingDoubles
+
+        return !invalidPatterns.contains(pin)
+    }
+}
