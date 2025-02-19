@@ -98,57 +98,32 @@ struct SmartPassPinView: View {
         }
     }
 }
+import Foundation
 
-struct PinValidationRules {
-    func isValid(pin: String) -> Bool {
-        guard pin.count == 4, pin.allSatisfy(\.isNumber) else { return false }
-        
-        let forbiddenPatterns = generateForbiddenPatterns()
-        
-        return !forbiddenPatterns.contains(pin)
-    }
+struct PinValidator {
+    // Regular expressions to match forbidden patterns
+    private let forbiddenPatterns: [NSRegularExpression] = [
+        try! NSRegularExpression(pattern: "^(\\d)\\1{3}$"), // Repeating numbers (e.g., 1111)
+        try! NSRegularExpression(pattern: "^(0123|1234|2345|3456|4567|5678|6789|7890)$"), // Sequential numbers
+        try! NSRegularExpression(pattern: "^(9876|8765|7654|6543|5432|4321|3210)$"), // Reverse sequential numbers
+        try! NSRegularExpression(pattern: "^(\\d)(\\d)\\2\\1$") // Mirrored numbers (e.g., 1221)
+    ]
     
-    private func generateForbiddenPatterns() -> Set<String> {
-        var patterns = Set<String>()
+    // Function to validate the PIN
+    func isValid(pin: String) -> Bool {
+        // Ensure the PIN is exactly 4 digits
+        guard pin.count == 4, pin.allSatisfy({ $0.isNumber }) else { return false }
         
-        // Sequential numbers (e.g., 1234, 2345)
-        for i in 0...6 {
-            let sequence = (i...(i+3)).map { "\($0)" }.joined()
-            patterns.insert(sequence)
-        }
-        
-        // Reversed sequential numbers (e.g., 4321, 5432)
-        for i in (3...9).reversed() {
-            let sequence = (i-3...i).reversed().map { "\($0)" }.joined()
-            patterns.insert(sequence)
-        }
-        
-        // Repeated numbers (e.g., 1111, 2222)
-        for i in 0...9 {
-            let repeated = String(repeating: "\(i)", count: 4)
-            patterns.insert(repeated)
-        }
-        
-        // Mirrored numbers (e.g., 1221, 3443)
-        for i in 0...9 {
-            for j in 0...9 where i != j {
-                let mirrored = "\(i)\(j)\(j)\(i)"
-                patterns.insert(mirrored)
+        // Check against each forbidden pattern
+        for pattern in forbiddenPatterns {
+            let range = NSRange(location: 0, length: pin.utf16.count)
+            if pattern.firstMatch(in: pin, options: [], range: range) != nil {
+                return false
             }
         }
-        
-        // Repeating doubles (e.g., 1212, 3434)
-        for i in 0...9 {
-            for j in 0...9 where i != j {
-                let repeatingDoubles = "\(i)\(j)\(i)\(j)"
-                patterns.insert(repeatingDoubles)
-            }
-        }
-        
-        return patterns
+        return true
     }
 }
-
 
 import XCTest
 @testable import YourAppModuleName
