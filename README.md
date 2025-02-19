@@ -228,3 +228,70 @@ struct SmartPassPINView_Previews: PreviewProvider {
         SmartPassPINView()
     }
 }
+
+
+
+
+import SwiftUI
+
+struct SmartPassPINView: View {
+    @State private var pin: String = ""
+    @State private var errorMessage: String? = nil
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Set up your Smart Pass PIN")
+                .font(.title)
+                .padding()
+
+            SecureField("Enter PIN", text: $pin)
+                .keyboardType(.numberPad)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .multilineTextAlignment(.center)
+                .frame(width: 200)
+                .onChange(of: pin) { newValue in
+                    let filtered = newValue.filter { "0123456789".contains($0) }
+                    if filtered.count <= 4 && isValidPIN(filtered) {
+                        pin = filtered
+                        errorMessage = nil
+                    } else {
+                        pin = String(pin.prefix(filtered.count - 1))
+                        errorMessage = "Invalid PIN pattern. Choose a different PIN."
+                    }
+                }
+
+            if let errorMessage = errorMessage {
+                Text(errorMessage)
+                    .foregroundColor(.red)
+                    .font(.caption)
+            }
+
+            Button("Confirm PIN") {
+                print("PIN set successfully")
+            }
+            .padding()
+            .disabled(pin.count < 4)
+        }
+        .padding()
+    }
+
+    func isValidPIN(_ pin: String) -> Bool {
+        guard pin.count == 4 else { return false }
+
+        let seriesPatterns = ["1234", "2345", "3456", "4567", "5678", "6789", "7890", "0987"]
+        let reversedSeriesPatterns = seriesPatterns.map { String($0.reversed()) }
+        let repeatingNumbers = (0...9).map { String(repeating: "\($0)", count: 4) }
+        let mirroredPatterns = ["1221", "2112", "3443", "4334", "5665", "6556", "7887", "8778"]
+        let repeatingDoubles = ["1212", "3434", "5656", "7878", "0909"]
+
+        let invalidPatterns = seriesPatterns + reversedSeriesPatterns + repeatingNumbers + mirroredPatterns + repeatingDoubles
+
+        return !invalidPatterns.contains(pin)
+    }
+}
+
+struct SmartPassPINView_Previews: PreviewProvider {
+    static var previews: some View {
+        SmartPassPINView()
+    }
+}
