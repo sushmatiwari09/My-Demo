@@ -1,0 +1,50 @@
+import SwiftUI
+
+struct RestrictedNumbersView: View {
+    let rules = [
+        ("Series of numbers", "1234, 4567, 3456, etc."),
+        ("Same number 3 or 4 times", "1111, 1115, 3000, etc."),
+        ("Mirrored numbers", "1221, 8448, 2662, etc."),
+        ("Reversed series", "4321, 8765, 0987, etc."),
+        ("Repeating doubles", "1212, 5959, 6767, etc.")
+    ]
+    
+    var body: some View {
+        content()
+            .padding()
+            .background(Color(.systemGray6))
+            .cornerRadius(12)
+            .shadow(radius: 4)
+            .padding()
+    }
+    
+    @ViewBuilder
+    private func content() -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ForEach(rules, id: \.(0)) { rule in
+                ruleRow(title: rule.0, description: rule.1)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func ruleRow(title: String, description: String) -> some View {
+        HStack {
+            Image(systemName: "xmark.circle.fill")
+                .foregroundColor(.red)
+            VStack(alignment: .leading) {
+                Text(title)
+                    .font(.headline)
+                Text(description)
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+            }
+        }
+    }
+}
+
+struct RestrictedNumbersView_Previews: PreviewProvider {
+    static var previews: some View {
+        RestrictedNumbersView()
+    }
+}
