@@ -1,99 +1,123 @@
 import SwiftUI
 
-struct RestrictedNumbersView: View {
-    let rules = [
-        ("Series of numbers", "1234, 4567, 3456, etc."),
-        ("Same number 3 or 4 times", "1111, 1115, 3000, etc."),
-        ("Mirrored numbers", "1221, 8448, 2662, etc."),
-        ("Reversed series", "4321, 8765, 0987, etc."),
-        ("Repeating doubles", "1212, 5959, 6767, etc.")
-    ]
+struct SmartPassPINView: View {
+    @State private var pin: String = ""
+    @State private var confirmPin: String = ""
+    @State private var showRestrictions: Bool = false
     
     var body: some View {
-        content()
-            .padding()
-            .background(Color(.systemGray6))
-            .cornerRadius(12)
-            .shadow(radius: 4)
-            .padding()
+        VStack(spacing: 24) {
+            headerView
+            pinEntryFields
+            guidelinesButton
+        }
+        .padding(.horizontal, 20)
+        .sheet(isPresented: $showRestrictions) {
+            PinRestrictionsView()
+        }
     }
     
-    @ViewBuilder
-    private func content() -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            ForEach(rules, id: \.(0)) { rule in
-                ruleRow(title: rule.0, description: rule.1)
+    private var headerView: some View {
+        Text("Set up your Smart Pass PIN")
+            .font(.title)
+            .bold()
+            .padding(.top, 40)
+    }
+    
+    private var pinEntryFields: some View {
+        VStack(spacing: 16) {
+            SecureField("Enter PIN", text: $pin)
+                .keyboardType(.numberPad)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                
+            SecureField("Confirm PIN", text: $confirmPin)
+                .keyboardType(.numberPad)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+        }
+    }
+    
+    private var guidelinesButton: some View {
+        Button(action: {
+            showRestrictions.toggle()
+        }) {
+            Text("View Smart Pass PIN guidelines")
+                .foregroundColor(.blue)
+                .font(.body)
+        }
+        .padding(.bottom, 40)
+    }
+}
+
+struct PinRestrictionsView: View {
+    @Environment(\.presentationMode) var presentationMode
+    
+    var body: some View {
+        NavigationView {
+            VStack {
+                HStack {
+                    Button(action: {
+                        presentationMode.wrappedValue.dismiss()
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.red)
+                            .font(.title2)
+                    }
+                    Spacer()
+                    Text("Smart Pass PIN restrictions")
+                        .font(.headline)
+                    Spacer()
+                }
+                .padding()
+                
+                List {
+                    Section(header: Text("Your Smart Pass PIN cannot include the following:")) {
+                        ForEach(restrictions, id: \..title) { restriction in
+                            RestrictionRow(title: restriction.title, example: restriction.example)
+                        }
+                    }
+                }
             }
         }
     }
     
-    @ViewBuilder
-    private func ruleRow(title: String, description: String) -> some View {
-        HStack {
+    private var restrictions: [Restriction] {
+        [
+            Restriction(title: "Series of numbers", example: "1234, 4567, 3456, etc."),
+            Restriction(title: "Same number 3 or 4 times", example: "1111, 1115, 3000, etc."),
+            Restriction(title: "Mirrored numbers", example: "1221, 8448, 2662, etc."),
+            Restriction(title: "Reversed series", example: "4321, 8765, 0987, etc."),
+            Restriction(title: "Repeating doubles", example: "1212, 5959, 6767, etc.")
+        ]
+    }
+}
+
+struct RestrictionRow: View {
+    let title: String
+    let example: String
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
             Image(systemName: "xmark.circle.fill")
                 .foregroundColor(.red)
-            VStack(alignment: .leading) {
-                Text(title)
-                    .font(.headline)
-                Text(description)
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
+                .font(.title2)
+                .padding(.top, 2)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.headline)
+                Text(example).font(.subheadline).foregroundColor(.gray)
             }
         }
+        .padding(.vertical, 4)
     }
 }
 
-struct RestrictedNumbersView_Previews: PreviewProvider {
-    static var previews: some View {
-        RestrictedNumbersView()
-    }
-}
-
-struct Rule: Identifiable {
+struct Restriction: Identifiable {
     let id = UUID()
     let title: String
-    let description: String
+    let example: String
 }
 
-struct RuleRow: View {
-    let rule: Rule
-
-    var body: some View {
-        HStack {
-            Image(systemName: "xmark.circle.fill")
-                .foregroundColor(.red)
-            VStack(alignment: .leading) {
-                Text(rule.title)
-                    .font(.headline)
-                Text(rule.description)
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-            }
-        }
+struct SmartPassPINView_Previews: PreviewProvider {
+    static var previews: some View {
+        SmartPassPINView()
     }
 }
-
-
-struct RestrictedNumbersView: View {
-    let rules: [Rule] = [
-        Rule(title: "Series of numbers", description: "1234, 4567, 3456, etc."),
-        Rule(title: "Same number 3 or 4 times", description: "1111, 1115, 3000, etc."),
-        Rule(title: "Mirrored numbers", description: "1221, 8448, 2662, etc."),
-        Rule(title: "Reversed series", description: "4321, 8765, 0987, etc."),
-        Rule(title: "Repeating doubles", description: "1212, 5959, 6767, etc.")
-    ]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            ForEach(rules) { rule in
-                RuleRow(rule: rule)
-            }
-        }
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
-        .shadow(radius: 4)
-        .padding()
-    }
-}
-
