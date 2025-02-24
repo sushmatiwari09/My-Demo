@@ -48,3 +48,52 @@ struct RestrictedNumbersView_Previews: PreviewProvider {
         RestrictedNumbersView()
     }
 }
+
+struct Rule: Identifiable {
+    let id = UUID()
+    let title: String
+    let description: String
+}
+
+struct RuleRow: View {
+    let rule: Rule
+
+    var body: some View {
+        HStack {
+            Image(systemName: "xmark.circle.fill")
+                .foregroundColor(.red)
+            VStack(alignment: .leading) {
+                Text(rule.title)
+                    .font(.headline)
+                Text(rule.description)
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+            }
+        }
+    }
+}
+
+
+struct RestrictedNumbersView: View {
+    let rules: [Rule] = [
+        Rule(title: "Series of numbers", description: "1234, 4567, 3456, etc."),
+        Rule(title: "Same number 3 or 4 times", description: "1111, 1115, 3000, etc."),
+        Rule(title: "Mirrored numbers", description: "1221, 8448, 2662, etc."),
+        Rule(title: "Reversed series", description: "4321, 8765, 0987, etc."),
+        Rule(title: "Repeating doubles", description: "1212, 5959, 6767, etc.")
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ForEach(rules) { rule in
+                RuleRow(rule: rule)
+            }
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+        .shadow(radius: 4)
+        .padding()
+    }
+}
+
