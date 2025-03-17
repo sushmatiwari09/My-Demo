@@ -1,0 +1,112 @@
+import Foundation
+import LocalAuthentication
+
+class LoginViewModel: ObservableObject {
+    @Published var isFaceID = false
+
+    init() {
+        detectBiometricType()
+    }
+
+    func detectBiometricType() {
+        let context = LAContext()
+        var error: NSError?
+
+        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
+            if context.biometryType == .faceID {
+                isFaceID = true
+            } else {
+                isFaceID = false
+            }
+        } else {
+            isFaceID = false
+        }
+    }
+}
+
+
+import SwiftUI
+
+struct LoginView: View {
+    @StateObject private var viewModel = LoginViewModel()
+
+    var body: some View {
+        VStack(spacing: 20) {
+            // Dynamic Authentication Icon
+            Image(systemName: viewModel.isFaceID ? "faceid" : "touchid")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 100, height: 100)
+                .foregroundColor(.blue)
+
+            // Title
+            Text("Log in faster on this device")
+                .font(.title2)
+                .bold()
+
+            // Biometric Authentication Button
+            Button(action: {
+                authenticateUser()
+            }) {
+                HStack {
+                    Image(systemName: viewModel.isFaceID ? "faceid" : "touchid")
+                    Text(viewModel.isFaceID ? "Activate Face ID" : "Activate Touch ID")
+                }
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+            }
+            .padding(.horizontal)
+
+            // MPIN Activation Button
+            Button(action: {
+                print("MPIN Activated")
+            }) {
+                HStack {
+                    Image(systemName: "lock.fill")
+                    Text("Activate MPIN")
+                }
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color.gray)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+            }
+            .padding(.horizontal)
+
+            // Maybe Later
+            Button(action: {
+                print("Maybe Later Pressed")
+            }) {
+                Text("Maybe later")
+                    .foregroundColor(.blue)
+                    .underline()
+            }
+            .padding(.top, 10)
+        }
+        .padding()
+    }
+
+    // Authentication Function
+    func authenticateUser() {
+        let context = LAContext()
+        var error: NSError?
+
+        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
+            let reason = "Authenticate to access your account"
+
+            context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) { success, authenticationError in
+                if success {
+                    print("Authentication Successful")
+                } else {
+                    print("Authentication Failed: \(authenticationError?.localizedDescription ?? "Unknown error")")
+                }
+            }
+        } else {
+            print("Biometric Authentication not available")
+        }
+    }
+}
+
