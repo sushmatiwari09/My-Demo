@@ -1,162 +1,78 @@
-Feature: Secure Text Field and Keyboard Handling
+Feature: Login
 
-  Scenario: User enters text in secure field and verifies masking
-    Given the app is launched
-    When the user enters "password123" in the secure text field
-    Then the secure text field should mask the entered text
+Scenario: User should be able to delete letters in-between value in password placeholder
+    Given User enters the password "Password@123" in the password text field
+    When User clicks on the 5 character in the password field
+    And User deletes characters using backspace key from the keyboard
+    Then Characters should get deleted
+    Then User should be able to input "U" character at position 4 in the password field
 
-  Scenario: User dismisses the keyboard by tapping outside
-    Given the app is launched
-    When the user enters "password123" in the secure text field
-    And the user taps outside the secure text field to dismiss the keyboard
-    Then the keyboard should be dismissed
 
-  Scenario: User dismisses the keyboard by pressing the return key
-    Given the app is launched
-    When the user enters "password123" in the secure text field
-    And the user presses the return key on the keyboard
-    Then the keyboard should be dismissed
 
-  Scenario: User edits text in the middle of the secure text field
-    Given the app is launched
-    When the user enters "password123" into the secure text field
-    And the user replaces the character at position 5 with "X"
-    Then the secure text field should display "passXord123"
-    And the input should remain masked
 
 import { Given, When, Then } from '@wdio/cucumber-framework';
-import SecureTextPage from '../../pages/secureTextPage';
+import QuickPasswordPage from '../pageobjects/QuickPasswordPage';
 
-Given('the app is launched', async () => {
-    await SecureTextPage.waitForAppToLoad();
+Given(/^User enters the password "([^"]*)" in the password text field$/, async (password: string) => {
+    await QuickPasswordPage.enterPassword(password);
 });
 
-When('the user enters {string} in the secure text field', async (text: string) => {
-    await SecureTextPage.enterSecureText(text);
+When(/^User clicks on the (\d+) character in the password field$/, async (position: number) => {
+    await QuickPasswordPage.clickCharacterAtPosition(position);
 });
 
-When('the user taps outside the secure text field to dismiss the keyboard', async () => {
-    await SecureTextPage.tapOutsideToDismissKeyboard();
+When(/^User deletes characters using backspace key from the keyboard$/, async () => {
+    await QuickPasswordPage.deleteCharacter();
 });
 
-When('the user presses the return key on the keyboard', async () => {
-    await SecureTextPage.pressReturnKey();
+Then(/^Characters should get deleted$/, async () => {
+    let currentValue = await QuickPasswordPage.passwordField.getText();
+    expect(currentValue).not.toContain('@'); // Assuming '@' is the character being deleted
 });
 
-When('the user replaces the character at position {int} with {string}', async (position: number, newChar: string) => {
-    await SecureTextPage.replaceCharacterAtPosition(position, newChar);
+Then(/^User should be able to input "([^"]*)" character at position (\d+) in the password field$/, async (character: string, position: number) => {
+    await QuickPasswordPage.enterCharacterAtPosition(character, position);
+    let currentValue = await QuickPasswordPage.passwordField.getText();
+    expect(currentValue.charAt(position - 1)).toBe(character);
 });
 
-Then('the secure text field should mask the entered text', async () => {
-    await SecureTextPage.verifySecureTextMasking();
-});
-
-Then('the keyboard should be dismissed', async () => {
-    await SecureTextPage.verifyKeyboardDismissed();
-});
-
-Then('the secure text field should display {string}', async (expectedText: string) => {
-    const actualText = await SecureTextPage.getSecureText();
-    if (actualText !== expectedText) {
-        throw new Error(`Expected text to be "${expectedText}" but found "${actualText}"`);
-    }
-});
-
-Then('the input should remain masked', async () => {
-    await SecureTextPage.verifySecureTextMasking();
-});
 
 
 import { ChainablePromiseElement } from 'webdriverio';
-import { driver } from '@wdio/globals';
 
-class SecureTextPage {
-    /**
-     * Define selectors using getter methods
-     */
-    private get secureTextField(): ChainablePromiseElement<WebdriverIO.Element> {
-        return $('~secureTextField'); // Accessibility ID for cross-platform compatibility
-    }
-
-    private get dismissArea(): ChainablePromiseElement<WebdriverIO.Element> {
-        return $('~dismissArea'); // Accessibility ID for the area to tap and dismiss the keyboard
-    }
-
-    /**
-     * Wait for the application to load
-     */
-    public async waitForAppToLoad(): Promise<void> {
-        await this.secureTextField.waitForDisplayed({ timeout: 10000 });
-    }
-
-    /**
-     * Enter text into the secure text field
-     * @param text The text to enter
-     */
-    public async enterSecureText(text: string): Promise<void> {
-        await this.secureTextField.setValue(text);
-    }
-
-    /**
-     * Tap outside the secure text field to dismiss the keyboard
-     */
-    public async tapOutsideToDismissKeyboard(): Promise<void> {
-        await this.dismissArea.click();
-    }
-
-    /**
-     * Press the return key on the keyboard
-     */
-    public async pressReturnKey(): Promise<void> {
-        const platform = await driver.getPlatformName();
-        if (platform === 'Android') {
-            await driver.pressKeyCode(66); // KeyEvent for 'Enter' key on Android
-        } else if (platform === 'iOS') {
-            await driver.execute('mobile: performEditorAction', { action: 'return' });
+class QuickPasswordPage {
+    get passwordField(): ChainablePromiseElement<WebdriverIO.Element> {
+        if (driver.isIOS) {
+            return $('//XCUIElementTypeSecureTextField'); // iOS secure text field
+        } else {
+            return $('//android.widget.EditText[@password="true"]'); // Android secure field
         }
     }
 
-    /**
-     * Replace a character at a specific position in the secure text field
-     * @param position The position (0-based index) of the character to replace
-     * @param newChar The new character to insert
-     */
-    public async replaceCharacterAtPosition(position: number, newChar: string): Promise<void> {
-        const currentValue = await this.secureTextField.getValue();
-        const newValue = currentValue.substring(0, position) + newChar + currentValue.substring(position + 1);
-        await this.secureTextField.setValue(newValue);
+    async enterPassword(password: string) {
+        await this.passwordField.setValue(password);
     }
 
-    /**
-     * Verify that the secure text field masks the entered text
-     */
-    public async verifySecureTextMasking(): Promise<void> {
-        const isSecure = await this.secureTextField.getAttribute('secure');
-        if (!isSecure) {
-            throw new Error('The secure text field is not masking the input.');
+    async clickCharacterAtPosition(position: number) {
+        let currentValue = await this.passwordField.getText();
+        let beforeText = currentValue.substring(0, position - 1);
+        await this.passwordField.setValue(beforeText); // Move cursor to position
+    }
+
+    async deleteCharacter() {
+        if (driver.isIOS) {
+            await driver.execute('mobile: pressButton', { name: 'delete' }); // iOS delete key
+        } else {
+            await driver.pressKeyCode(67); // Android Backspace keycode
         }
     }
 
-    /**
-     * Verify that the keyboard is dismissed
-     */
-    public async verifyKeyboardDismissed(): Promise<void> {
-        const isKeyboardShown = await driver.isKeyboardShown();
-        if (isKeyboardShown) {
-            throw new Error('The keyboard is still visible.');
-        }
-    }
-
-    /**
-     * Get the current value of the secure text field
-     * @returns The current text in the secure text field
-     */
-    public async getSecureText(): Promise<string> {
-        return this.secureTextField.getValue();
+    async enterCharacterAtPosition(character: string, position: number) {
+        let currentValue = await this.passwordField.getText();
+        let beforeText = currentValue.substring(0, position - 1);
+        let afterText = currentValue.substring(position - 1);
+        await this.passwordField.setValue(beforeText + character + afterText);
     }
 }
 
-export default new SecureTextPage();
-
-
-
+export default new QuickPasswordPage();
