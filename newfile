@@ -1,92 +1,188 @@
-import SwiftUI
-
-struct SmartPassPINInput: View {
-    @Binding var pin: String
-    var validatePIN: (String) -> Bool
-    @State private var errorMessage: String? = nil
-
-    var body: some View {
-        VStack(spacing: 10) {
-            SecureField("Enter PIN", text: Binding(
-                get: { self.pin },
-                set: { newValue in
-                    self.updatePIN(with: newValue)
-                }
-            ))
-            .keyboardType(.numberPad)
-            .textFieldStyle(RoundedBorderTextFieldStyle())
-            .multilineTextAlignment(.center)
-            .frame(width: 200)
-
-            if let errorMessage = errorMessage {
-                Text(errorMessage!)
-                    .foregroundColor(.red)
-                    .font(.caption)
-            }
-        }
-    }
-
-    private func updatePIN(with newValue: String) {
-        let filtered = newValue.filter { "0123456789".contains($0) }
-        if filtered.count <= 4 {
-            if validatePIN(filtered) {
-                self.pin = filtered
-                self.errorMessage = nil
-            } else {
-                self.errorMessage = "Invalid PIN pattern. Choose a different PIN."
-            }
-        }
-    }
-}
-
-
-import SwiftUI
-
-struct ContentView: View {
-    @State private var pin: String = ""
-
-    var body: some View {
-        VStack {
-            SmartPassPINInput(pin: $pin, validatePIN: isValidPIN)
-
-            Button("Confirm PIN") {
-                print("PIN set successfully")
-            }
-            .padding()
-            .disabled(pin.count < 4)
-        }
-        .padding()
-    }
-
-    private func isValidPIN(_ pin: String) -> Bool {
-        guard pin.count == 4 else { return true } // Allow incomplete PINs
-
-        let seriesPatterns = ["1234", "2345", "3456", "4567", "5678", "6789", "7890", "0987"]
-        let reversedSeriesPatterns = seriesPatterns.map { String($0.reversed()) }
-        let repeatingNumbers = (0...9).map { String(repeating: "\($0)", count: 4) }
-        let mirroredPatterns = ["1221", "2112", "3443", "4334", "5665", "6556", "7887", "8778"]
-        let repeatingDoubles = ["1212", "3434", "5656", "7878", "0909"]
-
-        let invalidPatterns = seriesPatterns + reversedSeriesPatterns + repeatingNumbers + mirroredPatterns + repeatingDoubles
-
-        return !invalidPatterns.contains(pin)
-    }
-}
-
-
 import Foundation
 
-func isValidPIN(_ pin: String) -> Bool {
-    let validPinRegex = #"^(?!.*(\d)\1{3})(?!.*(\d)(\d)\2\1)(?!.*(\d{2})\4)(?!.*(?:0123|1234|2345|3456|4567|5678|6789|7890|0987|9876|8765|7654|6543|5432|4321|3210))\d{4}$"#
-    let regex = try! NSRegularExpression(pattern: validPinRegex)
-    let range = NSRange(location: 0, length: pin.utf16.count)
-    return regex.firstMatch(in: pin, options: [], range: range) != nil
+enum OTPState: Equatable {
+    case idle
+    case verifying
+    case success
+    case invalid(String)  // Holds the error message
 }
 
-// Example usage
-let pin = "4829"
-if isValidPIN(pin) {
-    print("Valid PIN")
-} else {
-    print("Invalid PIN")
+class OTPViewModel: ObservableObject {
+    @Published var otpInput: String = ""
+    @Published var state: OTPState = .idle
+    @Published var isError: Bool = false
+    @Published var errorMessage: String = ""
+
+    private var service: OTPServiceProtocol
+
+    init(service: OTPServiceProtocol = MockOTPService()) {
+        self.service = service
+    }
+
+    func verifyOTP() {
+        resetError()
+        state = .verifying
+
+        service.verifyOTP(otpInput) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self?.state = .success
+
+                case .failure(let error):
+                    switch error {
+                    case .invalidOTP(let attemptsLeft):
+                        let message = attemptsLeft == 1
+                            ? "Invalid OTP. Last attempt remaining!"
+                            : "Invalid OTP. \(attemptsLeft) attempt(s) left."
+                        self?.setError(message)
+
+                    case .attemptsExceeded:
+                        self?.setError("No attempts left. Please try again later.")
+
+                    case .networkError:
+                        self?.setError("Network error. Please try again.")
+                    }
+                }
+            }
+        }
+    }
+
+    func resetError() {
+        isError = false
+        errorMessage = ""
+        state = .idle
+    }
+
+    private func setError(_ message: String) {
+        isError = true
+        errorMessage = message
+        state = .invalid(message)
+    }
+}
+
+
+
+class MockOTPService: OTPServiceProtocol {
+    private let correctOTP = "123456"
+    private var attempts = 0
+    private let maxAttempts = 3
+
+    func verifyOTP(_ code: String, completion: @escaping (Result<OTPResponse, OTPError>) -> Void) {
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
+            if code == self.correctOTP {
+                self.attempts = 0
+                completion(.success(OTPResponse(success: true)))
+            } else {
+                self.attempts += 1
+                let remaining = self.maxAttempts - self.attempts
+                if remaining > 0 {
+                    completion(.failure(.invalidOTP(attemptsLeft: remaining)))
+                } else {
+                    self.attempts = 0
+                    completion(.failure(.attemptsExceeded))
+                }
+            }
+        }
+    }
+}
+
+
+enum OTPError: Error {
+    case invalidOTP(attemptsLeft: Int)
+    case attemptsExceeded
+    case networkError
+}
+
+struct OTPResponse {
+    let success: Bool
+}
+
+
+import XCTest
+@testable import OTPApp
+
+final class OTPViewModelTests: XCTestCase {
+    var viewModel: OTPViewModel!
+    var mockService: MockOTPService!
+
+    override func setUp() {
+        mockService = MockOTPService()
+        viewModel = OTPViewModel(service: mockService)
+    }
+
+    func testSuccessOTPVerification() {
+        let expectation = expectation(description: "Valid OTP")
+        viewModel.otpInput = "123456"
+
+        viewModel.verifyOTP()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            XCTAssertEqual(self.viewModel.state, .success)
+            XCTAssertFalse(self.viewModel.isError)
+            expectation.fulfill()
+        }
+
+        wait(for: [expectation], timeout: 2)
+    }
+
+    func testInvalidOTPWithAttemptsLeft() {
+        let expectation = expectation(description: "Invalid OTP - 2 attempts left")
+
+        viewModel.otpInput = "000000"
+        viewModel.verifyOTP()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            XCTAssertTrue(self.viewModel.isError)
+            XCTAssertEqual(self.viewModel.errorMessage, "Invalid OTP. 2 attempt(s) left.")
+            expectation.fulfill()
+        }
+
+        wait(for: [expectation], timeout: 2)
+    }
+
+    func testLastAttemptWarning() {
+        let expectation = expectation(description: "Invalid OTP - last attempt")
+
+        viewModel.otpInput = "000000"
+        viewModel.verifyOTP() // 1st fail
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            self.viewModel.verifyOTP() // 2nd fail → last attempt
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            XCTAssertTrue(self.viewModel.isError)
+            XCTAssertEqual(self.viewModel.errorMessage, "Invalid OTP. Last attempt remaining!")
+            expectation.fulfill()
+        }
+
+        wait(for: [expectation], timeout: 2)
+    }
+func testNoAttemptsLeftMessage() {
+    // becomes
+    func testAttemptsExceededMessage() {
+        ...
+        XCTAssertEqual(self.viewModel.errorMessage, "No attempts left. Please try again later.")
+    }
+
+    func testNoAttemptsLeftMessage() {
+        let expectation = expectation(description: "No attempts left")
+
+        viewModel.otpInput = "000000"
+        viewModel.verifyOTP() // 1
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            self.viewModel.verifyOTP() // 2
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            self.viewModel.verifyOTP() // 3 → should reset and show final message
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+            XCTAssertTrue(self.viewModel.isError)
+            XCTAssertEqual(self.viewModel.errorMessage, "No attempts left. Please try again later.")
+            expectation.fulfill()
+        }
+
+        wait(for: [expectation], timeout: 3)
+    }
 }
