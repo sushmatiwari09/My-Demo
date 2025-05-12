@@ -1,188 +1,215 @@
-import Foundation
+// MARK: - FinalScreenType & Subtask
 
-enum OTPState: Equatable {
-    case idle
-    case verifying
-    case success
-    case invalid(String)  // Holds the error message
+enum FinalScreenType: Hashable {
+    case d1, d2, d3
 }
 
-class OTPViewModel: ObservableObject {
-    @Published var otpInput: String = ""
-    @Published var state: OTPState = .idle
-    @Published var isError: Bool = false
-    @Published var errorMessage: String = ""
+enum Subtask: String, CaseIterable, Hashable {
+    case profileSetup
+    case permissions
+    case notifications
+}
 
-    private var service: OTPServiceProtocol
+// MARK: - Route
 
-    init(service: OTPServiceProtocol = MockOTPService()) {
-        self.service = service
+enum Route: Hashable {
+    case screenA
+    case screenB
+    case screenC
+    case screenD1
+    case screenD2
+    case screenD3
+}
+
+// MARK: - Coordinator
+
+class Coordinator: ObservableObject {
+    @Published var path = NavigationPath()
+    @Published var taskProgress: [FinalScreenType: Set<Subtask>] = [
+        .d1: [], .d2: [], .d3: []
+    ]
+
+    private var finalDestination: FinalScreenType?
+
+    func start() {
+        path = NavigationPath()
+        path.append(Route.screenA)
     }
 
-    func verifyOTP() {
-        resetError()
-        state = .verifying
+    func selectFinalScreen(_ type: FinalScreenType) {
+        finalDestination = type
+        path.append(Route.screenB)
+    }
 
-        service.verifyOTP(otpInput) { [weak self] result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success:
-                    self?.state = .success
+    func goToC() {
+        path.append(Route.screenC)
+    }
 
-                case .failure(let error):
-                    switch error {
-                    case .invalidOTP(let attemptsLeft):
-                        let message = attemptsLeft == 1
-                            ? "Invalid OTP. Last attempt remaining!"
-                            : "Invalid OTP. \(attemptsLeft) attempt(s) left."
-                        self?.setError(message)
+    func goToFinalD() {
+        guard let final = finalDestination else { return }
+        switch final {
+        case .d1: path.append(Route.screenD1)
+        case .d2: path.append(Route.screenD2)
+        case .d3: path.append(Route.screenD3)
+        }
+    }
 
-                    case .attemptsExceeded:
-                        self?.setError("No attempts left. Please try again later.")
+    func updateTask(for type: FinalScreenType, completed: Set<Subtask>) {
+        taskProgress[type] = completed
+        start()
+    }
 
-                    case .networkError:
-                        self?.setError("Network error. Please try again.")
+    func pendingTasks(for type: FinalScreenType) -> [Subtask] {
+        let completed = taskProgress[type] ?? []
+        return Subtask.allCases.filter { !completed.contains($0) }
+    }
+
+    func isFlowComplete(for type: FinalScreenType) -> Bool {
+        return pendingTasks(for: type).isEmpty
+    }
+}
+
+// MARK: - RootView
+
+struct RootView: View {
+    @StateObject var coordinator = Coordinator()
+
+    var body: some View {
+        NavigationStack(path: $coordinator.path) {
+            ScreenA(type: .d1) { selected in
+                coordinator.selectFinalScreen(selected)
+            }
+            .navigationDestination(for: Route.self) { route in
+                switch route {
+                case .screenA:
+                    ScreenA(type: .d1) {
+                        coordinator.selectFinalScreen($0)
+                    }
+                case .screenB:
+                    ScreenB {
+                        coordinator.goToC()
+                    }
+                case .screenC:
+                    ScreenC {
+                        coordinator.goToFinalD()
+                    }
+                case .screenD1:
+                    ScreenD(type: .d1) { completed in
+                        coordinator.updateTask(for: .d1, completed: completed)
+                    }
+                case .screenD2:
+                    ScreenD(type: .d2) { completed in
+                        coordinator.updateTask(for: .d2, completed: completed)
+                    }
+                case .screenD3:
+                    ScreenD(type: .d3) { completed in
+                        coordinator.updateTask(for: .d3, completed: completed)
                     }
                 }
             }
         }
-    }
-
-    func resetError() {
-        isError = false
-        errorMessage = ""
-        state = .idle
-    }
-
-    private func setError(_ message: String) {
-        isError = true
-        errorMessage = message
-        state = .invalid(message)
+        .environmentObject(coordinator)
+        .onAppear {
+            coordinator.start()
+        }
     }
 }
 
+// MARK: - ScreenA
 
+struct ScreenA: View {
+    var type: FinalScreenType
+    var onButtonTap: (FinalScreenType) -> Void
+    @EnvironmentObject var coordinator: Coordinator
 
-class MockOTPService: OTPServiceProtocol {
-    private let correctOTP = "123456"
-    private var attempts = 0
-    private let maxAttempts = 3
-
-    func verifyOTP(_ code: String, completion: @escaping (Result<OTPResponse, OTPError>) -> Void) {
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
-            if code == self.correctOTP {
-                self.attempts = 0
-                completion(.success(OTPResponse(success: true)))
-            } else {
-                self.attempts += 1
-                let remaining = self.maxAttempts - self.attempts
-                if remaining > 0 {
-                    completion(.failure(.invalidOTP(attemptsLeft: remaining)))
-                } else {
-                    self.attempts = 0
-                    completion(.failure(.attemptsExceeded))
+    var body: some View {
+        VStack {
+            if !coordinator.isFlowComplete(for: type) {
+                Button(buttonTitle) {
+                    onButtonTap(type)
                 }
+            } else {
+                Text("✅ All steps for \(type) completed")
             }
         }
+        .navigationTitle("Screen A")
+    }
+
+    var buttonTitle: String {
+        let pending = coordinator.pendingTasks(for: type)
+        if pending.isEmpty {
+            return ""
+        } else {
+            let tasks = pending.map { $0.rawValue.capitalized }.joined(separator: ", ")
+            return "Continue setup: \(tasks)"
+        }
     }
 }
 
+// MARK: - ScreenB / ScreenC
 
-enum OTPError: Error {
-    case invalidOTP(attemptsLeft: Int)
-    case attemptsExceeded
-    case networkError
+struct ScreenB: View {
+    var onNext: () -> Void
+    var body: some View {
+        VStack {
+            Text("Screen B")
+            Button("Next to C") { onNext() }
+        }.navigationTitle("Screen B")
+    }
 }
 
-struct OTPResponse {
-    let success: Bool
+struct ScreenC: View {
+    var onNext: () -> Void
+    var body: some View {
+        VStack {
+            Text("Screen C")
+            Button("Next to Final D") { onNext() }
+        }.navigationTitle("Screen C")
+    }
 }
 
+// MARK: - ScreenD (Reusable)
 
-import XCTest
-@testable import OTPApp
+struct ScreenD: View {
+    var type: FinalScreenType
+    var onComplete: (Set<Subtask>) -> Void
 
-final class OTPViewModelTests: XCTestCase {
-    var viewModel: OTPViewModel!
-    var mockService: MockOTPService!
+    @State private var completedTasks: Set<Subtask> = []
 
-    override func setUp() {
-        mockService = MockOTPService()
-        viewModel = OTPViewModel(service: mockService)
+    var body: some View {
+        VStack(spacing: 20) {
+            ForEach(Subtask.allCases, id: \.self) { task in
+                Toggle(task.rawValue.capitalized, isOn: binding(for: task))
+            }
+            Button("Done") {
+                onComplete(completedTasks)
+            }
+        }
+        .padding()
+        .navigationTitle("Screen \(type)")
     }
 
-    func testSuccessOTPVerification() {
-        let expectation = expectation(description: "Valid OTP")
-        viewModel.otpInput = "123456"
-
-        viewModel.verifyOTP()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            XCTAssertEqual(self.viewModel.state, .success)
-            XCTAssertFalse(self.viewModel.isError)
-            expectation.fulfill()
-        }
-
-        wait(for: [expectation], timeout: 2)
+    private func binding(for task: Subtask) -> Binding<Bool> {
+        Binding(
+            get: { completedTasks.contains(task) },
+            set: { isOn in
+                if isOn {
+                    completedTasks.insert(task)
+                } else {
+                    completedTasks.remove(task)
+                }
+            }
+        )
     }
+}
 
-    func testInvalidOTPWithAttemptsLeft() {
-        let expectation = expectation(description: "Invalid OTP - 2 attempts left")
+// MARK: - App Entry Point
 
-        viewModel.otpInput = "000000"
-        viewModel.verifyOTP()
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            XCTAssertTrue(self.viewModel.isError)
-            XCTAssertEqual(self.viewModel.errorMessage, "Invalid OTP. 2 attempt(s) left.")
-            expectation.fulfill()
+@main
+struct MyApp: App {
+    var body: some Scene {
+        WindowGroup {
+            RootView()
         }
-
-        wait(for: [expectation], timeout: 2)
-    }
-
-    func testLastAttemptWarning() {
-        let expectation = expectation(description: "Invalid OTP - last attempt")
-
-        viewModel.otpInput = "000000"
-        viewModel.verifyOTP() // 1st fail
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            self.viewModel.verifyOTP() // 2nd fail → last attempt
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            XCTAssertTrue(self.viewModel.isError)
-            XCTAssertEqual(self.viewModel.errorMessage, "Invalid OTP. Last attempt remaining!")
-            expectation.fulfill()
-        }
-
-        wait(for: [expectation], timeout: 2)
-    }
-func testNoAttemptsLeftMessage() {
-    // becomes
-    func testAttemptsExceededMessage() {
-        ...
-        XCTAssertEqual(self.viewModel.errorMessage, "No attempts left. Please try again later.")
-    }
-
-    func testNoAttemptsLeftMessage() {
-        let expectation = expectation(description: "No attempts left")
-
-        viewModel.otpInput = "000000"
-        viewModel.verifyOTP() // 1
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            self.viewModel.verifyOTP() // 2
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            self.viewModel.verifyOTP() // 3 → should reset and show final message
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
-            XCTAssertTrue(self.viewModel.isError)
-            XCTAssertEqual(self.viewModel.errorMessage, "No attempts left. Please try again later.")
-            expectation.fulfill()
-        }
-
-        wait(for: [expectation], timeout: 3)
     }
 }
